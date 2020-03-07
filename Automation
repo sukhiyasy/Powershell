@@ -1,0 +1,103 @@
+$newname = “sksy”
+$domainname = “sukhiyasy.com” 
+$netbiosName = “sukhiyasy” 
+$DNSDomain="tteokbokkissi.local"
+$DNSServerIP="192.168.0.225"
+$DHCPServerIP="192.168.0.225"
+$StartRange="192.168.0.150"
+$EndRange="192.168.0.200"
+$Subnet="255.255.255.0"
+$Router="192.168.0.1"
+$DefaultUsername="Administrator"
+$Defaultpassword="Password13"
+$ipaddress = “192.168.0.225” 
+$ipprefix = “24” 
+$ipgw = “192.168.0.1” 
+$ipdns = “192.168.0.225” 
+$ipif = (Get-NetAdapter).ifIndex
+$Secret = ConvertTo-SecureString "Password13" -AsPlainText -Force
+$AutoLogonCount = (Get-ItemProperty $RegPath -Name AutoLogonCount).AutoLogonCount
+$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+$RegROPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
+
+
+Set-ItemProperty $RegROPath "yyy" ('C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe -executionPolicy Unrestricted -File ' +"C:\Users\Administrator\Desktop\yyy.ps1")
+
+
+if( -not  (Get-ItemProperty $RegPath -Name AutoLogonCount).AutoLogonCount)
+{
+Set-ItemProperty $RegPath "AutoLogonCount" -Value "3" -type Dword
+
+}
+
+Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String 
+Set-ItemProperty $RegPath "DefaultUsername" -Value "$DefaultUsername" -type String 
+Set-ItemProperty $RegPath "DefaultPassword" -Value "$Defaultpassword" -type String
+
+$AutoLogonCount = (Get-ItemProperty $RegPath -Name AutoLogonCount).AutoLogonCount
+Get-ItemProperty $RegPath -Name "AutoLogonCount".AutoLogonCount
+
+
+
+if($AutoLogonCount -eq 3)
+
+{
+  
+ #set static IP address 
+ 
+New-NetIPAddress -IPAddress $ipaddress -PrefixLength $ipprefix  -InterfaceIndex $ipif -DefaultGateway $ipgw
+#rename the computer 
+ 
+Rename-Computer -NewName $newname –force
+#install features 
+$featureLogPath = “c:\poshlog\featurelog.txt” 
+New-Item $featureLogPath -ItemType file -Force 
+$addsTools = “RSAT-AD-Tools” 
+Add-WindowsFeature $addsTools 
+Get-WindowsFeature | Where installed >>$featureLogPath
+
+
+#restart the computer 
+Restart-Computer
+}
+
+if($AutologonCount -eq 2)
+{
+#Install AD DS, DNS and GPMC 
+$featureLogPath = “c:\poshlog\featurelog.txt” 
+start-job -Name addFeature -ScriptBlock { 
+Add-WindowsFeature -Name “ad-domain-services” -IncludeAllSubFeature -IncludeManagementTools 
+Add-WindowsFeature -Name “dns” -IncludeAllSubFeature -IncludeManagementTools 
+Add-WindowsFeature -Name “gpmc” -IncludeAllSubFeature -IncludeManagementTools } 
+Wait-Job -Name addFeature 
+Get-WindowsFeature | Where installed >>$featureLogPath
+
+# Create New Forest, add Domain Controller 
+
+Import-Module ADDSDeployment 
+Install-ADDSForest -CreateDnsDelegation:$false ` -DatabasePath “C:\Windows\NTDS” ` -DomainMode “Win2012” ` -DomainName $domainname ` -DomainNetbiosName $netbiosName ` -ForestMode “Win2012” -SafeModeAdministratorPassword $Secret -InstallDns:$true ` -LogPath “C:\Windows\NTDS” ` -NoRebootOnCompletion:$false ` -SysvolPath “C:\Windows\SYSVOL” ` -Force:$true
+
+}
+
+if($AutologonCount -eq 1)
+{
+
+ 
+Install-WindowsFeature -Name 'DHCP' –IncludeManagementTools
+cmd.exe /c "netsh dhcp add securitygroups"
+Restart-service dhcpserver
+Add-DhcpServerInDC -DnsName $Env:COMPUTERNAME
+Set-ItemProperty –Path registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ServerManager\Roles\12 –Name ConfigurationState –Value 2
+Add-DhcpServerV4Scope -Name "DHCP Scope" -StartRange $StartRange -EndRange $EndRange -SubnetMask $Subnet
+Set-DhcpServerV4OptionValue -DnsDomain $DNSDomain -DnsServer $DNSServerIP -Router $Router 
+Set-DhcpServerv4Scope -ScopeId $DHCPServerIP -LeaseDuration 1.00:00:00
+}
+
+
+
+
+
+
+
+
+ 

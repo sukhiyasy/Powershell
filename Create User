@@ -1,0 +1,49 @@
+#Import data from csv bulk file
+$FileContent = Import-Csv -Delimiter "," -Path "C:\Users\Administrator\Desktop\Bulk-User-list.CSV"            
+foreach ($line in $FileContent) 
+ 
+          
+{            
+    $Firstname = $line.Firstname
+    $MiddleInitial = $line.MiddleInitial
+    $LastName = $line.LastName
+    $UserName = $line.Username
+    $PhoneNumber = $line.Phone
+    $Position = $line.Position
+    $Location = $line.Location
+    $EmailAddress = $line.EmailAddress
+    $Group1 = $line.Group1
+    $Group2 = $line.Group2
+     Write-Output $line.Firstname
+
+#Initating next script to run for creating users
+
+$PSScriptRoot 
+$ScriptToRun= $PSScriptRoot+"\createuser.ps1"
+&$ScriptToRun
+
+#    #$Displayname = $User.Firstname + " " + $User.Lastname            
+#    #$UserFirstname = $User.Firstname
+#    #$UserMiddlename = $User.MiddleInitial            
+#    #$UserLastname = $User.Lastname            
+#    #$OU = "$User.OU"            
+#    #$SAM = $User.SAM            
+#   #$UPN = $User.Firstname + "." + $User.Lastname + "@" + $User.Maildomain            
+#    #$Description = $User.Description            
+#    #$Password = $User.Password 
+
+
+#createuser.ps1 script
+dsadd user "CN=$Firstname,CN=Users,DC=SKSYSTEMADMIN,DC=com" -disabled no -fn $line.Firstname -mi $line.MiddleInitial -ln $line.LastName -upn $line.Username -tel $line.Phone -desc $line.Position -office $line.Location -email $line.EmailAddress -pwd "Sukhipassword13"
+Enable-ADAccount -Identity $Firstname
+
+         
+    
+
+
+
+
+
+
+}
+
